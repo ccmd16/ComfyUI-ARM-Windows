@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from comfy.model_base import BaseModel
     from comfy.controlnet import ControlBase
 import torch
+import os
 from functools import partial
 import collections
 import math
@@ -272,6 +273,9 @@ def _calc_cond_batch(model: BaseModel, conds: list[list[dict]], x_in: torch.Tens
                 if model.memory_required(input_shape, cond_shapes=cond_shapes) * 1.5 < free_memory:
                     to_batch = batch_amount
                     break
+
+            if os.environ.get("COMFYUI_QNN_SINGLE_CONDITION") == "1":
+                to_batch = to_batch[:1]
 
             input_x = []
             mult = []

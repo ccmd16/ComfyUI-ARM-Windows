@@ -1700,6 +1700,29 @@ def load_state_dict_guess_config(sd, output_vae=True, output_clip=True, output_c
     return (model_patcher, clip, vae, clipvision)
 
 
+def _dequantize_anima_convrot_cpu(sd):
+    if "llm_adapter.blocks.0.cross_attn.q_proj.weight" not in sd:
+        return
+
+    # Restore the original basis once at load time so CPU sampling and LoRA
+    # patching use ordinary weights without creating another checkpoint on disk.
+    suffix = ".comfy_quant"
+    for key in list(sd):
+        if not key.endswith(suffix):
+            continue
+        config = json.loads(sd[key].cpu().numpy().tobytes())
+        if config.get("format") != "int8_tensorwise" or not config.get("convrot"):
+            continue
+        layer = key[:-len(suffix)]
+        weight_key = layer + ".weight"
+        scale_key = layer + ".weight_scale"
+        groupsize = config.get("convrot_groupsize", 256)
+        sd[weight_key] = torch.ops.comfy_kitchen.dequantize_int8_convrot_weight(
+            sd[weight_key], sd[scale_key], groupsize
+        ).to(torch.bfloat16)
+        del sd[scale_key], sd[key]
+
+
 def load_diffusion_model_state_dict(sd, model_options={}, metadata=None, disable_dynamic=False):
     """
     Loads a UNet diffusion model from a state dictionary, supporting both diffusers and regular formats.
@@ -1730,13 +1753,15 @@ def load_diffusion_model_state_dict(sd, model_options={}, metadata=None, disable
     if len(temp_sd) > 0:
         sd = temp_sd
 
+    load_device = model_management.get_torch_device()
     custom_operations = model_options.get("custom_operations", None)
     if custom_operations is None:
+        if model_management.is_device_cpu(load_device):
+            _dequantize_anima_convrot_cpu(sd)
         sd, metadata = comfy.utils.convert_old_quants(sd, "", metadata=metadata)
     parameters = comfy.utils.calculate_parameters(sd)
     weight_dtype = comfy.utils.weight_dtype(sd)
 
-    load_device = model_management.get_torch_device()
     model_config = model_detection.model_config_from_unet(sd, "", metadata=metadata)
 
     if model_config is not None:

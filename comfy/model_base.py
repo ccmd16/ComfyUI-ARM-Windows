@@ -20,6 +20,7 @@ import comfy.ldm.hunyuan3dv2_1
 import comfy.ldm.hunyuan3dv2_1.hunyuandit
 import torch
 import logging
+import os
 import comfy.ldm.lightricks.av_model
 import comfy.context_windows
 from comfy.ldm.modules.diffusionmodules.openaimodel import UNetModel, Timestep
@@ -1219,6 +1220,26 @@ class CosmosPredict2(BaseModel):
 class Anima(BaseModel):
     def __init__(self, model_config, model_type=ModelType.FLOW, device=None):
         super().__init__(model_config, model_type, device=device, unet_model=comfy.ldm.anima.model.Anima)
+
+    def _apply_model(self, x, t, c_concat=None, c_crossattn=None, control=None, transformer_options={}, **kwargs):
+        patcher = self.current_patcher
+        if os.environ.get("COMFYUI_ANIMA_QNN") == "1":
+            adapter = transformer_options.get("anima_qnn_adapter")
+            eligible = (
+                patcher is not None and control is None
+                and (not patcher.patches or (adapter is not None and patcher.patches_uuid == adapter.patch_revision))
+                and not any(getattr(patcher, name, None) for name in (
+                    "object_patches", "weight_wrapper_patches", "current_hooks", "injections",
+                ))
+                and not any(transformer_options.get(name) for name in ("patches", "patches_replace", "wrappers"))
+            )
+            if not eligible and not getattr(self, "_anima_qnn_patch_warning", False):
+                logging.warning("Anima QNN: using CPU because this sampling call has model patches or controls")
+                self._anima_qnn_patch_warning = True
+            if not eligible and adapter is not None:
+                raise RuntimeError("Anima QNN LoRA cannot run with additional model patches or controls.")
+            transformer_options = {**transformer_options, "anima_qnn": eligible}
+        return super()._apply_model(x, t, c_concat, c_crossattn, control, transformer_options, **kwargs)
 
     def extra_conds(self, **kwargs):
         out = super().extra_conds(**kwargs)

@@ -313,7 +313,12 @@ class VAEDecode:
         if latent.is_nested:
             latent = latent.unbind()[0]
 
-        images = vae.decode(latent)
+        images = None
+        if os.environ.get("COMFYUI_QNN_SD15_VAE_ONNX"):
+            from comfy.snapdragon_qnn_vae import try_decode
+            images = try_decode(vae, latent)
+        if images is None:
+            images = vae.decode(latent)
         if len(images.shape) == 5: #Combine batches
             images = images.reshape(-1, images.shape[-3], images.shape[-2], images.shape[-1])
         return (images, )
@@ -606,6 +611,8 @@ class CheckpointLoaderSimple:
     def load_checkpoint(self, ckpt_name):
         ckpt_path = folder_paths.get_full_path_or_raise("checkpoints", ckpt_name)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
+        if out[2] is not None:
+            out[2]._qnn_checkpoint_path = ckpt_path
         return out[:3]
 
 class DiffusersLoader:
@@ -697,6 +704,9 @@ class LoraLoader:
     def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
         if strength_model == 0 and strength_clip == 0:
             return (model, clip)
+
+        if (strength_model != 0 and getattr(getattr(model, "model", None), "_qnn_fixed_sdxl", False)) or (strength_clip != 0 and getattr(clip, "_qnn_fixed_sdxl", False)):
+            raise ValueError("This precompiled SDXL QNN model cannot load LoRA at runtime. Use a standard checkpoint or convert a model with the LoRA merged.")
 
         lora_path = folder_paths.get_full_path_or_raise("loras", lora_name)
         lora = None

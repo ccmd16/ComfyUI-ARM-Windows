@@ -519,7 +519,7 @@ if __name__ == "__main__":
         else:
             logging.warning(
                 "This ARM fork is most reliable with x64 Python 3.11 or 3.12 under Windows emulation for the DirectML lane. "
-                "Use launch-arm-qnn.cmd if you want the Snapdragon QNN lane with native ARM64 Python 3.11."
+                "Use start.cmd with the native ARM64 Python 3.11 environment for Anima QNN."
             )
     logging.info("ComfyUI version: {}".format(comfyui_version.__version__))
     for package in ("comfy-aimdo", "comfy-kitchen"):

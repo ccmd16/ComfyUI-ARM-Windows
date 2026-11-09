@@ -6,7 +6,9 @@ __pycache__/
 !/input/example.png
 /models/
 /temp/
-/custom_nodes/
+/custom_nodes/*
+!/custom_nodes/anima-qnn-lora/
+!/custom_nodes/anima-qnn-lora/**
 !custom_nodes/example_node.py.example
 extra_model_paths.yaml
 /.vs
@@ -26,3 +28,4 @@ openapi.yaml
 filtered-openapi.yaml
 uv.lock
 .arm-bootstrap.stamp
+/custom_nodes/anima-qnn-lora/__pycache__/

@@ -1,3 +1,5 @@
+import logging
+
 from comfy.ldm.cosmos.predict2 import MiniTrainDIT
 import torch
 from torch import nn
@@ -212,3 +214,34 @@ class Anima(MiniTrainDIT):
         if t5xxl_ids is not None:
             context = self.preprocess_text_embeds(context, t5xxl_ids, t5xxl_weights=kwargs.pop("t5xxl_weights", None))
         return super().forward(x, timesteps, context, **kwargs)
+
+    def _run_transformer_blocks(self, x, time, context, **kwargs):
+        from comfy.anima_qnn import ImageBlockRuntime, QNN_IMAGE_SIZES
+
+        rope = kwargs["rope_emb_L_1_1_D"]
+        modulation = kwargs["adaln_lora_B_T_3D"]
+        qnn_enabled = kwargs["transformer_options"].get("anima_qnn")
+        adapters = kwargs["transformer_options"].get("anima_qnn_adapter")
+        if (
+            qnn_enabled
+            and kwargs["extra_per_block_pos_emb"] is None
+            and x.device.type == "cpu" and x.dtype == torch.float32
+            and x.shape[1] == 1 and x.shape[2] == x.shape[3] and x.shape[2] * 16 in QNN_IMAGE_SIZES
+            and context.shape == (x.shape[0], 512, 1024)
+            and modulation is not None
+            and time.shape[:2] == modulation.shape[:2] == (x.shape[0], 1)
+            and rope.shape[0] == 1
+        ):
+            if not hasattr(self, "_anima_qnn_runtime"):
+                self._anima_qnn_runtime = ImageBlockRuntime()
+            return self._anima_qnn_runtime.run(self.blocks, x, time, context, modulation, rope, adapters)
+        if adapters is not None and adapters.has_weights:
+            sizes = ", ".join(f"{size}×{size}" for size in QNN_IMAGE_SIZES)
+            raise RuntimeError(
+                f"Anima QNN LoRA supports {sizes} and up to 512 text tokens. "
+                "For a 1024×1024 output, sample at 512×512 and add Upscale Image after VAE Decode."
+            )
+        if qnn_enabled and not getattr(self, "_anima_qnn_shape_warning", False):
+            logging.warning("Anima QNN: using CPU for this latent or text shape")
+            self._anima_qnn_shape_warning = True
+        return super()._run_transformer_blocks(x, time, context, **kwargs)

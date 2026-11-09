@@ -614,7 +614,10 @@ def detect_unet_config(state_dict, key_prefix, metadata=None):
         dit_config["use_adaln_lora"] = True
         dit_config["adaln_lora_dim"] = 256
         if dit_config["model_channels"] == 2048:
-            dit_config["num_blocks"] = 28
+            dit_config["num_blocks"] = (
+                count_blocks(state_dict_keys, key_prefix + "blocks.{}.")
+                if dit_config["image_model"] == "anima" else 28
+            )
             dit_config["num_heads"] = 16
         elif dit_config["model_channels"] == 5120:
             dit_config["num_blocks"] = 36

@@ -30,40 +30,19 @@ License: GPL-3.0
 - Not officially affiliated with ComfyUI or Comfy Org
 - Performance will be limited compared with NVIDIA systems
 
-## One-command setup
-Run this from the repo root:
+## Launch ComfyUI
+After setting up the local Windows ARM64 `.venv`, run this from the repo root:
 
 ```powershell
-.\start-arm.cmd
+.\start.cmd
 ```
 
-This is the recommended ARM launch path. It bootstraps the ARM dependencies and starts ComfyUI in safe mode.
+This opens ComfyUI at `http://127.0.0.1:8192` with custom nodes and Anima QNN enabled. Set `COMFYUI_ANIMA_QNN=0` before launching for CPU-only Anima workflows.
 
-If you want custom nodes enabled, run:
+Use `bootstrap-arm-qnn.cmd` to install or repair the native ARM64 QNN environment. Use `bootstrap-arm.cmd` for the DirectML environment.
 
-```powershell
-.\start-arm-full.cmd
-```
-
-If you only want to repair or refresh the ARM dependency install, run:
-
-```powershell
-.\bootstrap-arm.cmd
-```
-
-If you want the experimental Snapdragon NPU lane, run:
-
-```powershell
-.\start-arm-qnn.cmd
-```
-
-If you want to install or repair the experimental Snapdragon QNN lane, run:
-
-```powershell
-.\bootstrap-arm-qnn.cmd
-```
-
-The QNN lane uses native ARM64 Python 3.11 on Windows ARM.
+### Anima QNN LoRAs
+Chain multiple `Load Anima LoRA (QNN, chainable)` nodes between the UNet loader and sampler, for example `UNET → LoRA A → LoRA B → KSampler`. Each node has its own strength. Image transformer LoRAs must use standard linear layers with rank at most 32; supported text-bridge LoRAs are also accumulated. QNN keeps each LoRA as separate runtime inputs instead of merging it into the base weights. The small graph cache is keyed by resolution and LoRA count: the first use of a new count compiles a graph, while changing LoRA files or strengths with the same count reuses it.
 
 ## Current status
 - CPU-only launch works on the supported path.
@@ -75,14 +54,7 @@ The QNN lane uses native ARM64 Python 3.11 on Windows ARM.
 ## ARM-specific files
 - `bootstrap-arm.cmd`
 - `bootstrap-arm-qnn.cmd`
-- `start-arm.cmd`
-- `start-arm-full.cmd`
-- `launch-arm.cmd`
-- `launch-arm-full.cmd`
-- `launch-arm-qnn.cmd`
-- `launch-arm-qnn-full.cmd`
-- `start-arm-qnn.cmd`
-- `start-arm-qnn-full.cmd`
+- `start.cmd`
 - `scripts/arm-common.ps1`
 - `scripts/bootstrap-arm.ps1`
 - `scripts/launch-arm.ps1`
@@ -398,16 +370,7 @@ ComfyUI will try to detect Windows on ARM and prefer DirectML when `torch-direct
 Set `COMFYUI_DISABLE_AUTO_DIRECTML=1` if you want to suppress the automatic DirectML attempt and choose the backend manually.
 If you have x64 Python installed but the launcher cannot see it, set `COMFYUI_ARM_PYTHON` to the full path of the exact `python.exe` you want the ARM launcher to use.
 
-For the ARM-focused fork, you can also use the helper scripts in this repository:
-
-1. Double-click [`launch-arm.cmd`](./launch-arm.cmd) for the stable safe-mode launcher. It bootstraps dependencies, starts ComfyUI, and disables custom nodes and API nodes by default.
-2. Double-click [`launch-arm-full.cmd`](./launch-arm-full.cmd) if you want the full launcher with custom nodes enabled.
-3. Double-click [`bootstrap-arm.cmd`](./bootstrap-arm.cmd) if you want to repair or refresh the ARM dependency install.
-4. Run [`scripts/bootstrap-arm.ps1`](./scripts/bootstrap-arm.ps1) directly if you want to repair or refresh the ARM dependency install from PowerShell.
-5. Pass `-CpuOnly` to [`scripts/launch-arm.ps1`](./scripts/launch-arm.ps1) if you want to force CPU mode for troubleshooting after installing a supported x64 Python.
-6. Pass `-SafeMode` and optionally `-WhitelistCustomNodes` to [`scripts/launch-arm.ps1`](./scripts/launch-arm.ps1) if you want to launch from PowerShell and selectively re-enable known-good custom node folders.
-7. Use [`launch-arm-qnn.cmd`](./launch-arm-qnn.cmd) for the experimental Snapdragon NPU lane. This uses the native ARM64 Python 3.11 stack, keeps the core app compatible with CPU fallback, and will try the QNN-backed denoiser for standard text-to-image workflows when ONNX Runtime can see a Snapdragon QNN NPU device.
-8. Use [`launch-arm-qnn-full.cmd`](./launch-arm-qnn-full.cmd) if you want the QNN lane without safe mode.
+Double-click [`start.cmd`](./start.cmd) for the local Anima setup. The PowerShell launcher still accepts `-Runtime`, `-CpuOnly`, `-SafeMode` and `-WhitelistCustomNodes` for troubleshooting other ARM environments. [PowerShell launcher](./scripts/launch-arm.ps1)
 
 The QNN lane needs both `onnxruntime` and `onnxruntime-qnn`, and the Snapdragon HTP/NPU path is still a hybrid path for now. Standard text-to-image denoising will try the QNN backend first, but unsupported ops or workflows can still fall back to CPU execution. If startup logs say there is no QNN NPU device, the NPU lane is not active yet and the run will stay on CPU.
 

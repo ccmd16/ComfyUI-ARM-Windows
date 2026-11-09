@@ -886,14 +886,15 @@ class MiniTrainDIT(nn.Module):
         if x_B_T_H_W_D.dtype == torch.float16:
             x_B_T_H_W_D = x_B_T_H_W_D.float()
 
-        for block in self.blocks:
-            x_B_T_H_W_D = block(
-                x_B_T_H_W_D,
-                t_embedding_B_T_D,
-                crossattn_emb,
-                **block_kwargs,
-            )
+        x_B_T_H_W_D = self._run_transformer_blocks(
+            x_B_T_H_W_D, t_embedding_B_T_D, crossattn_emb, **block_kwargs
+        )
 
         x_B_T_H_W_O = self.final_layer(x_B_T_H_W_D.to(crossattn_emb.dtype), t_embedding_B_T_D, adaln_lora_B_T_3D=adaln_lora_B_T_3D)
         x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)[:, :, :orig_shape[-3], :orig_shape[-2], :orig_shape[-1]]
         return x_B_C_Tt_Hp_Wp
+
+    def _run_transformer_blocks(self, x, time, context, **kwargs):
+        for block in self.blocks:
+            x = block(x, time, context, **kwargs)
+        return x
